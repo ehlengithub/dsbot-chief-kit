@@ -1,0 +1,8 @@
+.credentials.yaml
+*.sqlite*
+.anonymous-user-id
+sessions/
+storages/
+journal.jsonl
+snapshots/
+*.bak.*
