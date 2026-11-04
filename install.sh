@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# 一键：没装 DS Bot 就先从官方 GitHub Releases（Fei2411/DS-Bot）下载安装；装了就新建一个 Chief 机器人。
+# 一键：没装 DS Bot 就先从官方 GitHub Releases（Fei2411/DS-Bot）下载安装；再把 Chief 包下载到 ~/dsbot-chief-kit，
+# 最后打印一段话，复制给 DS Bot 的主机器人，由它用自带的 create_bot 建新 Chief。
 # 用法：curl -fsSL https://raw.githubusercontent.com/ehlengithub/dsbot-chief-kit/main/install.sh | bash
-# 不动已有机器人；重名自动叫 Chief-2、Chief-3…；不带任何密钥、账号、模型配置。
+# 不碰 DS Bot 的任何数据文件（~/.ds-bot 一个字节都不改）；不带任何密钥、账号、模型配置。
 set -euo pipefail
 REPO_TGZ="https://codeload.github.com/ehlengithub/dsbot-chief-kit/tar.gz/refs/heads/main"
 REL="https://github.com/Fei2411/DS-Bot/releases/latest/download"
 PAGE="https://dsbot.app/  （或 https://github.com/Fei2411/DS-Bot/releases）"
 OS="$(uname -s)"; ARCH="$(uname -m)"
 need(){ command -v "$1" >/dev/null || { echo "缺少 $1，请先安装后再运行"; exit 1; }; }
-need curl; need python3
+need curl; need tar
 
 # ---------- 1. DS Bot 装了没有 ----------
 app_installed(){
@@ -48,94 +49,35 @@ install_app(){
   esac
 }
 
-# ---------- 2. 数据目录在哪 ----------
-find_data(){
-  [ -n "${DSBOT_HOME:-}" ] && { echo "$DSBOT_HOME"; return; }
-  case "$OS" in Darwin) U="$HOME/Library/Application Support";; *) U="${XDG_CONFIG_HOME:-$HOME/.config}";; esac
-  for n in "DS Bot" "DeepSeek Bot"; do
-    L="$U/$n/locations.json"
-    [ -f "$L" ] && { python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["dataDir"])' "$L" 2>/dev/null && return; }
-  done
-  echo "$HOME/.ds-bot"
-}
+FRESH=""
+if ! app_installed; then install_app; FRESH=1; fi
 
-FIRST_RUN_MSG="下一步：
-  1) 打开 DS Bot，按提示走完第一次设置（选数据位置），在设置里登录你自己的 DeepSeek 账号或填你自己的 API key；
-  2) 看到默认机器人后，完全退出 DS Bot；
-  3) 再运行一次同一条命令，就会装上 Chief。"
+# ---------- 2. 下载 Chief 包到固定文件夹 ----------
+KIT="${DSBOT_KIT_DIR:-$HOME/dsbot-chief-kit}"
+TMPK="$(mktemp -d)"
+curl -fsSL "${DSBOT_KIT_TGZ:-$REPO_TGZ}" | tar xz --strip-components=1 -C "$TMPK"
+[ -f "$TMPK/docs/chief_instructions.md" ] || { echo "Chief 包下载不完整，已停止"; rm -rf "$TMPK"; exit 1; }
+rm -rf "$KIT"; mkdir -p "$(dirname "$KIT")"; mv "$TMPK" "$KIT"
+KIT="$(cd "$KIT" && pwd)"
 
-if ! app_installed; then install_app; echo; echo "DS Bot 已安装。$FIRST_RUN_MSG"; exit 0; fi
+# ---------- 3. 生成要粘贴给主机器人的话 ----------
+MSG="请帮我新建一个机器人，按下面步骤做，别改你自己（主机器人）的设定：
+1. 先用 list_bots 看看现在有哪些机器人。名字定为 Chief；如果已经有叫 Chief 的，就用 Chief-2，还被占用就 Chief-3，依次往后。
+2. 用你的读文件工具读 ${KIT}/docs/chief_instructions.md 的全部内容（一个字都不要删改）。
+3. 用 create_bot 新建这个机器人：name 用第 1 步定的名字，role 填「幕僚长」，instructions 填第 2 步读到的全文，brief 写「接单话术和报价助手」。模型不用指定。
+4. 建好后用 message_bot 发给这个新机器人：「请用读文件工具读完 ${KIT}/memory/MEMORY.md 和 ${KIT}/memory/接单话术.md 两个文件，把里面每一条规矩和事实用 remember 分条存进你自己的记忆（话术相关的 topic 填 接单话术），存完回我一句。」
+5. 新机器人回复存好后，用一句话告诉我：新机器人叫什么名字，记忆存好了没有。"
+printf '%s\n' "$MSG" > "$KIT/PASTE_TO_CHIEF.txt"
 
-H="$(find_data)"; S="$H/bot/state.json"
-[ -f "$S" ] || { echo "DS Bot 已安装，但还没完成第一次设置（没找到 ${S}）。"; echo "$FIRST_RUN_MSG"; exit 0; }
-
-if [ -z "${DSBOT_SKIP_RUNCHECK:-}" ] && pgrep -fi "DS Bot.app/|DeepSeek Bot.app/|DS Bot/dsbot|DS-Bot.*AppImage|/usr/bin/dsbot" >/dev/null 2>&1; then
-  echo "DS Bot 正在运行，请先完全退出 DS Bot，再运行一次这条命令"; exit 1; fi
-
-# ---------- 3. 拿到 Chief 的文件 ----------
-SRC="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
-if [ -z "$SRC" ] || [ ! -f "$SRC/bot/chief.json" ]; then
-  K="$(mktemp -d)"; curl -fsSL "${DSBOT_KIT_TGZ:-$REPO_TGZ}" | tar xz --strip-components=1 -C "$K"; SRC="$K"
+if [ -n "$FRESH" ]; then
+  echo
+  echo "DS Bot 已经装好。先做这两步："
+  echo "  1) 打开 DS Bot，按提示走完第一次设置，登录你自己的 DeepSeek 账号或填你自己的 API key；"
+  echo "  2) 看到默认的主机器人以后，把下面这段话发给它。"
 fi
-
-# ---------- 4. 新建机器人 ----------
-BAK="$S.bak.$(date +%Y%m%d%H%M%S).$$"; cp "$S" "$BAK"; echo "已备份：$BAK"
-OUT=$(KIT="$SRC" S="$S" python3 - <<'P'
-import json,os,uuid,time
-s=os.environ['S'];kit=os.environ['KIT']
-d=json.load(open(s,encoding='utf-8'))
-c=json.load(open(os.path.join(kit,'bot','chief.json'),encoding='utf-8'))
-bots=d.setdefault('bots',{})
-names={b.get('name') for b in bots.values()}
-name=c['name'];n=2
-while name in names: name=f"{c['name']}-{n}";n+=1
-sid='session-'+str(uuid.uuid4())
-model=c['model']
-for i in d.get('mainBotIds',[]):
-    if i in bots and bots[i].get('model'): model=bots[i]['model'];break
-bots[sid]={'id':sid,'name':name,'role':c['role'],'color':c['color'],'avatar':c['avatar'],
- 'instructions':c['instructions'],'createdAt':int(time.time()*1000),'createdBy':None,
- 'capabilities':[],'model':model,'appliedModel':model}
-d['revision']=int(d.get('revision',0))+1
-tmp=s+'.tmp';json.dump(d,open(tmp,'w',encoding='utf-8'),ensure_ascii=False,indent=2);os.replace(tmp,s)
-json.load(open(s,encoding='utf-8'))
-print(sid+'\t'+name)
-P
-)
-ID="${OUT%%$'\t'*}"; NAME="${OUT#*$'\t'}"
-M="$H/bot/memory/bots/$ID"; mkdir -p "$M"; cp "$SRC"/memory/*.md "$M/"
-# DS Bot 还要每个机器人有一个对话文件，否则点不进去
-H="$H" ID="$ID" NAME="$NAME" python3 - <<'P'
-import json,os,glob,time,struct
-h=os.environ['H'];sid=os.environ['ID'];name=os.environ['NAME']
-root=os.path.join(h,'sessions')
-dirs=[d for d in glob.glob(os.path.join(root,'*')) if os.path.isdir(d) and glob.glob(os.path.join(d,'session-*'))]
-if not dirs: print('提示：没找到 DS Bot 的对话目录，新机器人可能点不进去'); raise SystemExit
-ws=max(dirs,key=lambda d:len(glob.glob(os.path.join(d,'session-*'))))
-cwd=None
-import subprocess
-for f in glob.glob(os.path.join(ws,'session-*','session.v4.jsonl.zstd')):
-  try:
-    first=subprocess.run(['zstd','-dc',f],capture_output=True,timeout=10).stdout.split(b'\n',1)[0]
-    cwd=json.loads(first).get('cwd')
-    if cwd: break
-  except Exception: pass
-if not cwd:
-  cwd='/'+os.path.basename(ws).strip('-').replace('-','/').replace('~0020',' ')
-t=int(time.time()*1000)
-L=[{"type":"session","version":4,"id":sid,"createdAt":t,"cwd":cwd,"isSeeded":False,"delegationDepth":0,"agentPreset":"standard"},
-{"type":"permission/preset","seq":0,"time":t,"data":{"preset":"workspace-write"}},
-{"type":"sandbox/mode","seq":1,"time":t,"data":{"mode":"workspace-write"}},
-{"type":"approval/policy","seq":2,"time":t,"data":{"policy":"ask"}},
-{"type":"session/title","seq":3,"time":t,"data":{"title":name,"messageSeqs":[],"source":{"kind":"user"}}}]
-raw=''.join(json.dumps(x,ensure_ascii=False)+'\n' for x in L).encode()
-# 最简 zstd 帧：不压缩的原样块
-out=struct.pack('<I',0xFD2FB528)+bytes([0x00,0x50])
-for i in range(0,len(raw),131072):
-  c=raw[i:i+131072];last=1 if i+131072>=len(raw) else 0
-  out+=(last|(0<<1)|(len(c)<<3)).to_bytes(3,'little')+c
-d=os.path.join(ws,sid);os.makedirs(d,exist_ok=True)
-open(os.path.join(d,'session.v4.jsonl.zstd'),'wb').write(out)
-open(os.path.join(d,'session.lock'),'a').close()
-P
-echo "完成：新建机器人「${NAME}」，设定、记忆、话术都写好了。打开 DS Bot 就能看到。"
+echo
+echo "Chief 的文件已放到：${KIT}"
+echo "打开 DS Bot，把下面虚线之间的整段话复制，发给主机器人（这段话也存在 ${KIT}/PASTE_TO_CHIEF.txt）："
+echo "------------------------------------------------------------"
+printf '%s\n' "$MSG"
+echo "------------------------------------------------------------"
