@@ -104,4 +104,38 @@ P
 )
 ID="${OUT%%$'\t'*}"; NAME="${OUT#*$'\t'}"
 M="$H/bot/memory/bots/$ID"; mkdir -p "$M"; cp "$SRC"/memory/*.md "$M/"
+# DS Bot 还要每个机器人有一个对话文件，否则点不进去
+H="$H" ID="$ID" NAME="$NAME" python3 - <<'P'
+import json,os,glob,time,struct
+h=os.environ['H'];sid=os.environ['ID'];name=os.environ['NAME']
+root=os.path.join(h,'sessions')
+dirs=[d for d in glob.glob(os.path.join(root,'*')) if os.path.isdir(d) and glob.glob(os.path.join(d,'session-*'))]
+if not dirs: print('提示：没找到 DS Bot 的对话目录，新机器人可能点不进去'); raise SystemExit
+ws=max(dirs,key=lambda d:len(glob.glob(os.path.join(d,'session-*'))))
+cwd=None
+import subprocess
+for f in glob.glob(os.path.join(ws,'session-*','session.v4.jsonl.zstd')):
+  try:
+    first=subprocess.run(['zstd','-dc',f],capture_output=True,timeout=10).stdout.split(b'\n',1)[0]
+    cwd=json.loads(first).get('cwd')
+    if cwd: break
+  except Exception: pass
+if not cwd:
+  cwd='/'+os.path.basename(ws).strip('-').replace('-','/').replace('~0020',' ')
+t=int(time.time()*1000)
+L=[{"type":"session","version":4,"id":sid,"createdAt":t,"cwd":cwd,"isSeeded":False,"delegationDepth":0,"agentPreset":"standard"},
+{"type":"permission/preset","seq":0,"time":t,"data":{"preset":"workspace-write"}},
+{"type":"sandbox/mode","seq":1,"time":t,"data":{"mode":"workspace-write"}},
+{"type":"approval/policy","seq":2,"time":t,"data":{"policy":"ask"}},
+{"type":"session/title","seq":3,"time":t,"data":{"title":name,"messageSeqs":[],"source":{"kind":"user"}}}]
+raw=''.join(json.dumps(x,ensure_ascii=False)+'\n' for x in L).encode()
+# 最简 zstd 帧：不压缩的原样块
+out=struct.pack('<I',0xFD2FB528)+bytes([0x00,0x50])
+for i in range(0,len(raw),131072):
+  c=raw[i:i+131072];last=1 if i+131072>=len(raw) else 0
+  out+=(last|(0<<1)|(len(c)<<3)).to_bytes(3,'little')+c
+d=os.path.join(ws,sid);os.makedirs(d,exist_ok=True)
+open(os.path.join(d,'session.v4.jsonl.zstd'),'wb').write(out)
+open(os.path.join(d,'session.lock'),'a').close()
+P
 echo "完成：新建机器人「${NAME}」，设定、记忆、话术都写好了。打开 DS Bot 就能看到。"
