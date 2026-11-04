@@ -26,9 +26,9 @@ install_app(){
     Darwin-arm64) F=DS-Bot-mac-arm64.zip;;
     Darwin-x86_64) F=DS-Bot-mac-x64.zip;;
     Linux-x86_64) F=DS-Bot-linux-x86_64.AppImage;;
-    *) echo "这台电脑（$OS $ARCH）没有现成的 DS Bot 安装包，请到官方页面手动下载：$PAGE"; exit 1;;
+    *) echo "这台电脑（$OS ${ARCH}）没有现成的 DS Bot 安装包，请到官方页面手动下载：$PAGE"; exit 1;;
   esac
-  echo "没找到 DS Bot，正在从官方 GitHub 下载 $F（约 350MB，请稍等）…"
+  echo "没找到 DS Bot，正在从官方 GitHub 下载 ${F}（约 350MB，请稍等）…"
   curl -fL --progress-bar -o "$T/$F" "$REL/$F"
   curl -fsSL -o "$T/SUMS" "$REL/SHA256SUMS.txt"
   WANT="$(awk -v f="$F" '$2==f{print $1}' "$T/SUMS")"
@@ -44,7 +44,7 @@ install_app(){
             cp -R "$APP" "$DEST/"; echo "已装到 $DEST/$(basename "$APP")"
             echo "第一次打开时 macOS 可能拦：系统设置 → 隐私与安全性 → 仍要打开。";;
     Linux)  DEST="${DEST:-$HOME/Applications}"; mkdir -p "$DEST"; cp "$T/$F" "$DEST/"; chmod +x "$DEST/$F"
-            echo "已装到 $DEST/$F（AppImage 需要 FUSE2；Ubuntu 24.04 起若打不开，改装官方 deb）";;
+            echo "已装到 $DEST/${F}（AppImage 需要 FUSE2；Ubuntu 24.04 起若打不开，改装官方 deb）";;
   esac
 }
 
@@ -67,7 +67,7 @@ FIRST_RUN_MSG="下一步：
 if ! app_installed; then install_app; echo; echo "DS Bot 已安装。$FIRST_RUN_MSG"; exit 0; fi
 
 H="$(find_data)"; S="$H/bot/state.json"
-[ -f "$S" ] || { echo "DS Bot 已安装，但还没完成第一次设置（没找到 $S）。"; echo "$FIRST_RUN_MSG"; exit 0; }
+[ -f "$S" ] || { echo "DS Bot 已安装，但还没完成第一次设置（没找到 ${S}）。"; echo "$FIRST_RUN_MSG"; exit 0; }
 
 if [ -z "${DSBOT_SKIP_RUNCHECK:-}" ] && pgrep -fi "DS Bot.app/|DeepSeek Bot.app/|DS Bot/dsbot|DS-Bot.*AppImage|/usr/bin/dsbot" >/dev/null 2>&1; then
   echo "DS Bot 正在运行，请先完全退出 DS Bot，再运行一次这条命令"; exit 1; fi
@@ -104,4 +104,4 @@ P
 )
 ID="${OUT%%$'\t'*}"; NAME="${OUT#*$'\t'}"
 M="$H/bot/memory/bots/$ID"; mkdir -p "$M"; cp "$SRC"/memory/*.md "$M/"
-echo "完成：新建机器人「$NAME」，设定、记忆、话术都写好了。打开 DS Bot 就能看到。"
+echo "完成：新建机器人「${NAME}」，设定、记忆、话术都写好了。打开 DS Bot 就能看到。"
