@@ -4,26 +4,21 @@
 
 ⚠️ 内容里有客户群名、聊天和价格，**这个仓库只能私有，不要公开、不要转发**。仓库里没有任何密钥。
 
-## 安装（需要 DS Bot 0.2.7）
-
-1. 先装好 DS Bot 0.2.7，打开一次，填上**自己的** DeepSeek 密钥，等 Chief 出现后**完全退出** DS Bot。
-2. 在终端（macOS / Linux）运行：
+## 一键安装（已装 DS Bot 的电脑）
+先完全退出 DS Bot，然后在终端运行这一行：
 
 ```
 git clone https://github.com/ehlengithub/dsbot-chief-kit.git && bash dsbot-chief-kit/install.sh
 ```
 
-没装 git 的话，用一个能读这个仓库的 GitHub token（把 XXX 换掉）：
+Windows（PowerShell，未实测）：`git clone https://github.com/ehlengithub/dsbot-chief-kit.git; powershell -ExecutionPolicy Bypass -File dsbot-chief-kit\install.ps1`
 
-```
-mkdir -p dsbot-chief-kit && curl -fsSL -H "Authorization: token XXX" https://api.github.com/repos/ehlengithub/dsbot-chief-kit/tarball | tar xz --strip-components=1 -C dsbot-chief-kit && bash dsbot-chief-kit/install.sh
-```
-
-3. 打开 DS Bot，Chief 就带着这些规矩和记忆了。
+装完打开 DS Bot，会多出一个叫 Chief 的机器人（已有同名的就叫 Chief-2、Chief-3……），设定、记忆和话术都带好了。
 
 ## 说明
-- 脚本会把原来的 `state.json` 先备份成 `state.json.bak.时间`，再把主机器人的名字、设定、模型换成这里的；记忆文件拷进它的记忆文件夹。跑几遍都一样。
-- 不碰密钥文件 `.credentials.yaml`。
+- 脚本会**新建**一个机器人，不改你已有的机器人；写入前把 `state.json` 备份成 `state.json.bak.时间`。每跑一次就多一个。
+- 新机器人用你主机器人当前的模型；不带任何密钥、账号或 DeepSeek 配置，也不碰 `.credentials.yaml`。
+- DS Bot 正在运行时脚本会直接退出，先关掉再跑。
 - 数据目录默认 `~/.ds-bot`，别的位置用 `DSBOT_HOME=路径 bash install.sh`。
-- Windows 暂时没有脚本：可以手动把 `bot/chief.json` 里的 `instructions` 贴进 Chief 的设定，把 `memory/` 两个文件拷到 `%USERPROFILE%\.ds-bot\bot\memory\bots\<Chief 的 id>\`（路径未实测）。
+- `docs/` 里有 Chief 设定的 md 版、测试题库、硬件成本参考（2026-11 价，仅供估算）。
 - `lessons/` 是教材，换别的 AI 也能直接喂给它用。
